@@ -1,5 +1,11 @@
 package ru.yandex.practicum;
 
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.comments.Comment;
+import com.github.javaparser.ast.comments.LineComment;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -56,19 +62,27 @@ public class TranslatorMOJO extends AbstractMojo {
         scanner.setCaseSensitive(false);
         scanner.scan();
         String[] files = scanner.getIncludedFiles();
-        System.out.println(String.join(" , ",files));
 
         for (String file : files) {
             try {
-                BufferedReader br = new BufferedReader(new FileReader(file));
-                StringBuilder sb = new StringBuilder();
-                while (br.ready()){
-                    String line = br.readLine();
-                    sb.append(line + "\n");
+                FileInputStream in = new FileInputStream(Paths.get(file).toFile());
+                CompilationUnit compilationUnit = StaticJavaParser.parse(in);
+                List<Comment> comments = compilationUnit.getAllContainedComments();
+                comments.addAll(compilationUnit.getOrphanComments());
+                for (Comment comment : comments) {
+                    if (comment.isLineComment()) {
+                        Node parent = comment.getCommentedNode().orElse(null);
+                        if (parent != null) {
+                            parent.setComment(new LineComment("Replaced line"));
+                        } else {
+                            comment.setContent("Replaced line");
+                        }
+                    }
+
                 }
-//                Files.createDirectory(Paths.get(mavenProject.getBuild().getDirectory()));
-//                BufferedWriter bf = new BufferedWriter();
-                System.out.println(sb.toString());
+
+                FileOutputStream out = new FileOutputStream(file);
+                out.write(compilationUnit.toString().getBytes());
             } catch (FileNotFoundException e) {
                 throw new RuntimeException(e);
             } catch (IOException e) {
